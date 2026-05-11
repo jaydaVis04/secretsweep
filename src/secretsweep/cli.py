@@ -24,6 +24,7 @@ def build_parser() -> argparse.ArgumentParser:
     scan_parser.add_argument("--entropy", type=float, help="Override the entropy threshold")
     scan_parser.add_argument("--allowlist", type=Path, help="Path to a TOML/YAML/JSON allowlist file")
     scan_parser.add_argument("--baseline", type=Path, help="Path to a baseline JSON file")
+    scan_parser.add_argument("--write-baseline", type=Path, help="Write current findings to a baseline JSON file")
     scan_parser.add_argument("--no-git", action="store_true", help="Scan without git-aware behavior")
     scan_parser.add_argument("--verbose", action="store_true", help="Show scanned and skipped files")
     scan_parser.add_argument("--redact", action="store_true", help="Redact matched values in-place")
@@ -102,12 +103,15 @@ def print_human(
 
 
 def print_json(findings: list[Finding], scanned_files: int) -> None:
-    payload = {
+    print(json.dumps(build_json_payload(findings, scanned_files), indent=2))
+
+
+def build_json_payload(findings: list[Finding], scanned_files: int) -> dict:
+    return {
         "scanned_files": scanned_files,
         "findings": [finding.to_json() for finding in findings],
         "summary": summarize(findings),
     }
-    print(json.dumps(payload, indent=2))
 
 
 def should_fail(findings: list[Finding], threshold: str) -> bool:
@@ -156,6 +160,12 @@ def command_scan(args: argparse.Namespace) -> int:
         print_json(findings, stats.scanned_files)
     else:
         print_human(findings, stats.scanned_files, stats.scanned_paths, stats.skipped_files, args.verbose)
+
+    if args.write_baseline is not None:
+        args.write_baseline.write_text(
+            json.dumps(build_json_payload(findings, stats.scanned_files), indent=2) + "\n",
+            encoding="utf-8",
+        )
 
     return 1 if should_fail(findings, args.fail_on) else 0
 

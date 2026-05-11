@@ -19,6 +19,7 @@ secretsweep scan . --json            # Machine-readable output for CI
 secretsweep scan . --entropy 4.2     # Tune entropy threshold
 secretsweep scan . --allowlist patterns.toml
 secretsweep scan . --baseline .secretsweep-baseline.json
+secretsweep scan . --write-baseline .secretsweep-baseline.json
 secretsweep scan . --redact          # Redact findings in scanned files
 secretsweep redact .env              # Redact a single file in place
 secretsweep install-hook             # Install as a pre-commit hook
@@ -113,7 +114,7 @@ high_entropy = true
 Generate a baseline from current findings:
 
 ```bash
-secretsweep scan . --json > .secretsweep-baseline.json
+secretsweep scan . --write-baseline .secretsweep-baseline.json
 ```
 
 Then compare future scans against it:

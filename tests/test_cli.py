@@ -123,6 +123,31 @@ class SecretsweepCliTests(unittest.TestCase):
             self.assertEqual(payload["summary"]["high"], 0)
             self.assertEqual(payload["findings"], [])
 
+    def test_write_baseline_generates_json_file(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            root = Path(tempdir)
+            target = root / ".env"
+            target.write_text(
+                f'DATABASE_URL="{self.fake_database_url()}"\n',
+                encoding="utf-8",
+            )
+            baseline = root / ".secretsweep-baseline.json"
+
+            code, stdout, _ = self.run_cli(
+                "scan",
+                str(root),
+                "--json",
+                "--no-git",
+                "--write-baseline",
+                str(baseline),
+            )
+
+            self.assertEqual(code, 1)
+            payload = json.loads(stdout)
+            written = json.loads(baseline.read_text(encoding="utf-8"))
+            self.assertEqual(written["summary"], payload["summary"])
+            self.assertEqual(written["findings"][0]["rule"], "database-url")
+
     def test_redact_command_replaces_secret_values(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
             root = Path(tempdir)
