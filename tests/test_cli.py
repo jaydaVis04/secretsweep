@@ -9,6 +9,7 @@ from contextlib import redirect_stdout, redirect_stderr
 from pathlib import Path
 
 from secretsweep.cli import main
+from secretsweep.gitutils import install_pre_commit_hook
 
 
 class SecretsweepCliTests(unittest.TestCase):
@@ -196,6 +197,16 @@ class SecretsweepCliTests(unittest.TestCase):
             payload = json.loads(stdout)
             rules = {finding["rule"] for finding in payload["findings"]}
             self.assertIn("high-entropy", rules)
+
+    def test_install_hook_uses_module_fallback_when_binary_is_missing(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            root = Path(tempdir)
+            subprocess.run(["git", "init", "-b", "main"], cwd=root, check=True, capture_output=True, text=True)
+            hook_path = install_pre_commit_hook(root)
+            contents = hook_path.read_text(encoding="utf-8")
+
+            self.assertIn("PYTHONPATH=src python3 -m secretsweep", contents)
+            self.assertIn("command -v secretsweep", contents)
 
 
 if __name__ == "__main__":

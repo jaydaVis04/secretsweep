@@ -48,7 +48,17 @@ cleanup() {
 }
 trap cleanup EXIT
 
-if ! secretsweep scan . --staged --json --fail-on high > "$TMP_FILE"; then
+if command -v secretsweep >/dev/null 2>&1; then
+  SCAN_CMD="secretsweep scan . --staged --json --fail-on high"
+elif [ -f "pyproject.toml" ] && [ -d "src/secretsweep" ] && command -v python3 >/dev/null 2>&1; then
+  SCAN_CMD="PYTHONPATH=src python3 -m secretsweep scan . --staged --json --fail-on high"
+else
+  echo "secretsweep pre-commit hook could not find a runnable scanner."
+  echo "Install the package or commit from the project root."
+  exit 1
+fi
+
+if ! sh -c "$SCAN_CMD" > "$TMP_FILE"; then
   python3 - "$TMP_FILE" <<'PY'
 import json
 import sys
