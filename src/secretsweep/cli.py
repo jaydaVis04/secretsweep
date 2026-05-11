@@ -2,11 +2,13 @@ from __future__ import annotations
 
 import argparse
 import json
+import platform
+import shutil
 import sys
 from pathlib import Path
 
 from . import __version__
-from .config import STARTER_CONFIG, load_config
+from .config import STARTER_CONFIG, discover_config, load_config
 from .gitutils import install_pre_commit_hook, is_git_repo, staged_files
 from .models import Finding, SEVERITY_RANK
 from .scanner import apply_baseline, iter_files, redact_text, scan_file, summarize
@@ -36,6 +38,9 @@ def build_parser() -> argparse.ArgumentParser:
     redact_parser.add_argument("--allowlist", type=Path, help="Path to a TOML/YAML/JSON allowlist file")
 
     subparsers.add_parser("install-hook", help="Install a git pre-commit hook")
+    doctor_parser = subparsers.add_parser("doctor", help="Inspect local environment and repo readiness")
+    doctor_parser.add_argument("target", nargs="?", default=".", help="Directory to inspect")
+    doctor_parser.add_argument("--json", action="store_true", help="Output JSON diagnostics")
     init_parser = subparsers.add_parser("init", help="Generate a starter secretsweep.toml")
     init_parser.add_argument("--force", action="store_true", help="Overwrite an existing config")
     return parser
@@ -119,6 +124,47 @@ def should_fail(findings: list[Finding], threshold: str) -> bool:
     return any(SEVERITY_RANK[finding.severity] >= SEVERITY_RANK[cutoff] for finding in findings)
 
 
+def build_doctor_payload(target: Path) -> dict:
+    resolved = target.resolve()
+    scan_root = resolved if resolved.is_dir() else resolved.parent
+    config_path = discover_config(scan_root)
+    return {
+        "version": __version__,
+        "target": str(resolved),
+        "scan_root": str(scan_root),
+        "python": {
+            "version": platform.python_version(),
+            "executable": sys.executable,
+        },
+        "commands": {
+            "git": shutil.which("git"),
+            "secretsweep": shutil.which("secretsweep"),
+            "python": shutil.which("python"),
+            "python3": shutil.which("python3"),
+            "py": shutil.which("py"),
+        },
+        "git": {
+            "inside_repo": is_git_repo(scan_root),
+            "hooks_path": str(scan_root / ".git" / "hooks"),
+        },
+        "config": {
+            "found": config_path is not None,
+            "path": str(config_path) if config_path is not None else None,
+        },
+    }
+
+
+def print_doctor_human(payload: dict) -> None:
+    print(f"secretsweep {payload['version']}")
+    print(f"Target: {payload['target']}")
+    print(f"Scan root: {payload['scan_root']}")
+    print(f"Python: {payload['python']['version']} ({payload['python']['executable']})")
+    print(f"Git command: {payload['commands']['git'] or 'not found'}")
+    print(f"secretsweep command: {payload['commands']['secretsweep'] or 'not found'}")
+    print(f"Git repo: {'yes' if payload['git']['inside_repo'] else 'no'}")
+    print(f"Config: {payload['config']['path'] or 'not found'}")
+
+
 def command_scan(args: argparse.Namespace) -> int:
     target = Path(args.target).resolve()
     if not target.exists():
@@ -197,6 +243,18 @@ def command_install_hook() -> int:
     return 0
 
 
+def command_doctor(args: argparse.Namespace) -> int:
+    target = Path(args.target)
+    if not target.exists():
+        raise RuntimeError(f"Target does not exist: {target}")
+    payload = build_doctor_payload(target)
+    if args.json:
+        print(json.dumps(payload, indent=2))
+    else:
+        print_doctor_human(payload)
+    return 0
+
+
 def command_init(args: argparse.Namespace) -> int:
     target = Path.cwd() / "secretsweep.toml"
     if target.exists() and not args.force:
@@ -216,6 +274,8 @@ def main(argv: list[str] | None = None) -> int:
             return command_redact(args)
         if args.command == "install-hook":
             return command_install_hook()
+        if args.command == "doctor":
+            return command_doctor(args)
         if args.command == "init":
             return command_init(args)
     except RuntimeError as exc:

@@ -193,6 +193,20 @@ class SecretsweepCliTests(unittest.TestCase):
             self.assertIn("Wrote starter config", stdout)
             self.assertTrue((root / "secretsweep.toml").exists())
 
+    def test_doctor_json_reports_environment_details(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            root = Path(tempdir)
+            (root / "secretsweep.toml").write_text("[scan]\nentropy_threshold = 4.5\n", encoding="utf-8")
+
+            code, stdout, _ = self.run_cli("doctor", str(root), "--json")
+
+            self.assertEqual(code, 0)
+            payload = json.loads(stdout)
+            self.assertEqual(payload["target"], str(root.resolve()))
+            self.assertTrue(payload["config"]["found"])
+            self.assertEqual(payload["config"]["path"], str((root / "secretsweep.toml").resolve()))
+            self.assertIn("version", payload["python"])
+
     def test_staged_scan_only_reports_staged_file(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
             root = Path(tempdir)
