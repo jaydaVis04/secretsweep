@@ -9,7 +9,7 @@ from contextlib import redirect_stdout, redirect_stderr
 from pathlib import Path
 
 from secretsweep.cli import main
-from secretsweep.gitutils import install_pre_commit_hook
+from secretsweep.gitutils import build_pre_commit_hook_script, install_pre_commit_hook
 
 
 class SecretsweepCliTests(unittest.TestCase):
@@ -236,6 +236,14 @@ class SecretsweepCliTests(unittest.TestCase):
 
             self.assertIn("PYTHONPATH=src python3 -m secretsweep", contents)
             self.assertIn("command -v secretsweep", contents)
+            self.assertIn('REPO_ROOT="$(git rev-parse --show-toplevel)"', contents)
+
+    def test_hook_script_includes_windows_python_fallbacks(self) -> None:
+        contents = build_pre_commit_hook_script()
+
+        self.assertIn('command -v py', contents)
+        self.assertIn('PYTHONPATH=src py -m secretsweep', contents)
+        self.assertIn('command -v python', contents)
 
     def test_non_sensitive_uppercase_source_constant_is_not_entropy_flagged(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:

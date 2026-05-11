@@ -35,14 +35,19 @@ def staged_files(path: Path) -> list[Path]:
     return files
 
 
-def install_pre_commit_hook(repo_root: Path) -> Path:
-    hook_dir = repo_root / ".git" / "hooks"
-    hook_dir.mkdir(parents=True, exist_ok=True)
-    hook_path = hook_dir / "pre-commit"
-    script = """#!/bin/sh
+def build_pre_commit_hook_script() -> str:
+    return """#!/bin/sh
 set -eu
 
-TMP_FILE="$(mktemp "${TMPDIR:-/tmp}/secretsweep.XXXXXX.json")"
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+cd "$REPO_ROOT"
+
+if command -v mktemp >/dev/null 2>&1; then
+  TMP_FILE="$(mktemp "${TMPDIR:-/tmp}/secretsweep.XXXXXX.json")"
+else
+  TMP_FILE="${TMPDIR:-/tmp}/secretsweep.$$.json"
+  : > "$TMP_FILE"
+fi
 cleanup() {
   rm -f "$TMP_FILE"
 }
@@ -50,6 +55,10 @@ trap cleanup EXIT
 
 if command -v secretsweep >/dev/null 2>&1; then
   SCAN_CMD="secretsweep scan . --staged --json --fail-on high"
+elif [ -f "pyproject.toml" ] && [ -d "src/secretsweep" ] && command -v py >/dev/null 2>&1; then
+  SCAN_CMD="PYTHONPATH=src py -m secretsweep scan . --staged --json --fail-on high"
+elif [ -f "pyproject.toml" ] && [ -d "src/secretsweep" ] && command -v python >/dev/null 2>&1; then
+  SCAN_CMD="PYTHONPATH=src python -m secretsweep scan . --staged --json --fail-on high"
 elif [ -f "pyproject.toml" ] && [ -d "src/secretsweep" ] && command -v python3 >/dev/null 2>&1; then
   SCAN_CMD="PYTHONPATH=src python3 -m secretsweep scan . --staged --json --fail-on high"
 else
@@ -83,6 +92,12 @@ PY
   fi
 fi
 """
-    hook_path.write_text(script, encoding="utf-8")
+
+
+def install_pre_commit_hook(repo_root: Path) -> Path:
+    hook_dir = repo_root / ".git" / "hooks"
+    hook_dir.mkdir(parents=True, exist_ok=True)
+    hook_path = hook_dir / "pre-commit"
+    hook_path.write_text(build_pre_commit_hook_script(), encoding="utf-8")
     hook_path.chmod(0o755)
     return hook_path
