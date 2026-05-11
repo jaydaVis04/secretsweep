@@ -160,7 +160,7 @@ This repository also includes a CI workflow at `.github/workflows/ci.yml` that:
 - verifies the installed `secretsweep` entrypoint
 - builds sdist and wheel artifacts
 
-Release automation is defined in `.github/workflows/release.yml`. Pushing a tag like `v0.1.0` runs the test suite, builds the package, and attaches the build artifacts to a GitHub Release.
+Release automation is defined in `.github/workflows/release.yml`. Pushing a tag like `v0.1.1` runs the test suite, builds the package, and attaches the build artifacts to a GitHub Release.
 
 ## Development
 
@@ -183,15 +183,15 @@ make build
 
 ## Releases
 
-Current package version: `0.1.0`
+Current package version: `0.1.1`
 
 Recommended release flow:
 
 ```bash
 make test
 make build
-git tag v0.1.0
-git push origin v0.1.0
+git tag v0.1.1
+git push origin v0.1.1
 ```
 
 For the next release, update the version in `pyproject.toml` and `src/secretsweep/__init__.py`, add a changelog entry in `CHANGELOG.md`, then create and push the new `vX.Y.Z` tag.
