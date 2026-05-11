@@ -169,6 +169,15 @@ PYTHONPATH=src python -m unittest -v
 PYTHONPATH=src python -m secretsweep scan . --json
 ```
 
+Or use the included shortcuts:
+
+```bash
+make install-dev
+make test
+make scan
+make build
+```
+
 ## Safety Guarantees
 
 - No network calls during scanning
