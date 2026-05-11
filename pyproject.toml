@@ -29,6 +29,11 @@ classifiers = [
   "Topic :: Software Development :: Quality Assurance"
 ]
 
+[project.urls]
+Homepage = "https://github.com/jaydaVis04/secretsweep"
+Repository = "https://github.com/jaydaVis04/secretsweep"
+Issues = "https://github.com/jaydaVis04/secretsweep/issues"
+
 [project.scripts]
 secretsweep = "secretsweep.cli:main"
 
