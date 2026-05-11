@@ -32,6 +32,10 @@ class SecretsweepCliTests(unittest.TestCase):
     def fake_github_token() -> str:
         return "gh" + "p_" + "1234567890abcdefghijABCDEFGHIJ"
 
+    @staticmethod
+    def fake_entropy_secret() -> str:
+        return "9fK2mQ7xR4vN8pL1tY6zH3wB0cD5sJ"
+
     def run_cli(self, *args: str) -> tuple[int, str, str]:
         stdout = io.StringIO()
         stderr = io.StringIO()
@@ -189,7 +193,7 @@ class SecretsweepCliTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tempdir:
             root = Path(tempdir)
             target = root / ".env"
-            target.write_text('SESSION_VALUE="9fK2mQ7xR4vN8pL1tY6zH3wB0cD5sJ"\n', encoding="utf-8")
+            target.write_text(f'SECRET_KEY="{self.fake_entropy_secret()}"\n', encoding="utf-8")
 
             code, stdout, _ = self.run_cli("scan", str(root), "--json", "--no-git", "--entropy", "4.0")
 
@@ -207,6 +211,21 @@ class SecretsweepCliTests(unittest.TestCase):
 
             self.assertIn("PYTHONPATH=src python3 -m secretsweep", contents)
             self.assertIn("command -v secretsweep", contents)
+
+    def test_non_sensitive_uppercase_source_constant_is_not_entropy_flagged(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            root = Path(tempdir)
+            target = root / "tooling.py"
+            target.write_text(
+                'SCAN_CMD = "PYTHONPATH=src python3 -m secretsweep scan . --staged --json --fail-on high"\n',
+                encoding="utf-8",
+            )
+
+            code, stdout, _ = self.run_cli("scan", str(root), "--json", "--no-git")
+
+            self.assertEqual(code, 0)
+            payload = json.loads(stdout)
+            self.assertEqual(payload["findings"], [])
 
 
 if __name__ == "__main__":

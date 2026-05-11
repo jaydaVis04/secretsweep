@@ -252,9 +252,10 @@ def scan_line(relative_path: str, line_no: int, line: str, config: Config) -> li
         name = assignment.group("name")
         value = assignment.group("dq") or assignment.group("sq") or assignment.group("bare") or ""
         if value and not is_allowlisted(config, relative_path, value):
-            config_like = is_config_like(relative_path, name)
+            config_like = is_config_file(relative_path)
             sensitive_name = bool(SENSITIVE_NAME_RE.search(name))
-            if config_like and sensitive_name and not any(
+            source_sensitive = sensitive_name and name.isupper()
+            if (config_like or source_sensitive) and sensitive_name and not any(
                 finding.rule in {"generic-api-key", "database-url"} for finding in findings
             ):
                 findings.append(
@@ -270,9 +271,9 @@ def scan_line(relative_path: str, line_no: int, line: str, config: Config) -> li
                 )
             if (
                 config.rules.get("high_entropy", True)
-                and config_like
+                and (config_like or source_sensitive)
                 and len(value) >= config.min_secret_length
-                and (sensitive_name or name.isupper())
+                and sensitive_name
             ):
                 entropy = shannon_entropy(value)
                 if entropy >= config.entropy_threshold:
@@ -291,14 +292,14 @@ def scan_line(relative_path: str, line_no: int, line: str, config: Config) -> li
     return findings
 
 
-def is_config_like(relative_path: str, name: str) -> bool:
+def is_config_file(relative_path: str) -> bool:
     path = Path(relative_path)
     suffix = path.suffix.lower()
     if suffix in CONFIG_LIKE_EXTENSIONS:
         return True
     if path.name.startswith(".env"):
         return True
-    return name.isupper()
+    return False
 
 
 def scan_file(root: Path, path: Path, config: Config, stats: ScanStats, verbose: bool = False) -> list[Finding]:
