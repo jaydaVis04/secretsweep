@@ -5,13 +5,15 @@ import json
 import platform
 import shutil
 import sys
+import time
+from datetime import UTC, datetime
 from pathlib import Path
 
 from . import __version__
 from .config import STARTER_CONFIG, discover_config, load_config
 from .gitutils import install_pre_commit_hook, is_git_repo, staged_files
 from .models import Finding, SEVERITY_RANK
-from .scanner import apply_baseline, iter_files, redact_text, scan_file, summarize
+from .scanner import RULES, apply_baseline, iter_files, redact_text, scan_file, summarize
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -107,15 +109,28 @@ def print_human(
     print(" Run with --json for CI output or use `secretsweep redact <file>` to sanitize files.")
 
 
-def print_json(findings: list[Finding], scanned_files: int) -> None:
-    print(json.dumps(build_json_payload(findings, scanned_files), indent=2))
+def print_json(payload: dict) -> None:
+    print(json.dumps(payload, indent=2))
 
 
-def build_json_payload(findings: list[Finding], scanned_files: int) -> dict:
+def build_rule_catalog() -> dict[str, dict]:
+    return {
+        rule.name: {
+            "severity": rule.severity,
+            "message": rule.message,
+            "recommendation": rule.recommendation,
+        }
+        for rule in RULES
+    }
+
+
+def build_json_payload(findings: list[Finding], scanned_files: int, metadata: dict | None = None) -> dict:
     return {
         "scanned_files": scanned_files,
         "findings": [finding.to_json() for finding in findings],
         "summary": summarize(findings),
+        "metadata": metadata or {},
+        "rules": build_rule_catalog(),
     }
 
 
@@ -166,6 +181,8 @@ def print_doctor_human(payload: dict) -> None:
 
 
 def command_scan(args: argparse.Namespace) -> int:
+    started_at = datetime.now(UTC)
+    started_counter = time.perf_counter()
     target = Path(args.target).resolve()
     if not target.exists():
         raise RuntimeError(f"Target does not exist: {target}")
@@ -202,16 +219,32 @@ def command_scan(args: argparse.Namespace) -> int:
             text = path.read_text(encoding="utf-8", errors="ignore")
             path.write_text(redact_text(text, file_findings), encoding="utf-8")
 
+    duration_ms = round((time.perf_counter() - started_counter) * 1000, 2)
+    payload = build_json_payload(
+        findings,
+        stats.scanned_files,
+        metadata={
+            "version": __version__,
+            "target": str(target),
+            "scan_root": str(scan_root),
+            "started_at": started_at.isoformat(),
+            "duration_ms": duration_ms,
+            "entropy_threshold": config.entropy_threshold,
+            "min_secret_length": config.min_secret_length,
+            "staged": args.staged,
+            "baseline_applied": str(args.baseline) if args.baseline else None,
+            "allowlist_applied": str(args.allowlist) if args.allowlist else None,
+            "redacted": args.redact,
+        },
+    )
+
     if args.json:
-        print_json(findings, stats.scanned_files)
+        print_json(payload)
     else:
         print_human(findings, stats.scanned_files, stats.scanned_paths, stats.skipped_files, args.verbose)
 
     if args.write_baseline is not None:
-        args.write_baseline.write_text(
-            json.dumps(build_json_payload(findings, stats.scanned_files), indent=2) + "\n",
-            encoding="utf-8",
-        )
+        args.write_baseline.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
 
     return 1 if should_fail(findings, args.fail_on) else 0
 

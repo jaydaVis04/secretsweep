@@ -58,6 +58,9 @@ class SecretsweepCliTests(unittest.TestCase):
             self.assertEqual(payload["scanned_files"], 1)
             self.assertEqual(payload["summary"]["high"], 1)
             self.assertEqual(payload["findings"][0]["rule"], "database-url")
+            self.assertEqual(payload["metadata"]["target"], str(root.resolve()))
+            self.assertIn("duration_ms", payload["metadata"])
+            self.assertIn("database-url", payload["rules"])
 
     def test_allowlist_suppresses_matching_findings(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
@@ -147,6 +150,7 @@ class SecretsweepCliTests(unittest.TestCase):
             written = json.loads(baseline.read_text(encoding="utf-8"))
             self.assertEqual(written["summary"], payload["summary"])
             self.assertEqual(written["findings"][0]["rule"], "database-url")
+            self.assertEqual(written["metadata"]["target"], payload["metadata"]["target"])
 
     def test_redact_command_replaces_secret_values(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
